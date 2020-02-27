@@ -1,0 +1,586 @@
+<html>
+
+<!-- these 4 files always have to be included <script src="../../../ioBroker.sonos/sonos.js"></script> -->
+<link rel="stylesheet" type="text/css" href="../../lib/css/themes/jquery-ui/redmond/jquery-ui.min.css"/>
+<script type="text/javascript" src="../../lib/js/jquery-1.11.1.min.js"></script>
+<script type="text/javascript" src="../../socket.io/socket.io.js"></script>
+<script type="text/javascript" src="../../lib/js/jquery-ui-1.10.3.full.min.js"></script>
+
+<!-- these two file always have to be included -->
+<link rel="stylesheet" type="text/css" href="../../css/adapter.css"/>
+<script type="text/javascript" src="../../js/translate.js"></script>
+<script type="text/javascript" src="../../js/adapter-settings.js"></script>
+<script type="text/javascript" src="zip/zip.js"></script>
+<script type="text/javascript" src="zip/zip-ext.js"></script>
+
+<!--script type="text/javascript" src="zip/z-worker.js"></script-->
+<script type="text/javascript" src="zip/inflate.js"></script>
+<style>
+    #drop-zone {
+        width: calc(100% - 10px);
+        height: calc(100% - 10px);
+        position: absolute;
+        opacity: 0.8;
+        top: 0;
+        left: 0;
+        background: #eee;
+        -webkit-border-radius: 15px;
+        -moz-border-radius: 15px;
+        border-radius: 15px;
+        z-index: 1;
+        font-size: 32px;
+        font-weight: bold;
+        text-align: center;
+        border: 5px dashed darkgray;
+    }
+    .dropZone-error {
+        background: #faa !important;
+        color: #f00;
+    }
+    /* Tooltip container */
+    .tooltip {
+        position: relative;
+        display: inline-block;
+        border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+    }
+
+    /* Tooltip text */
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 120px;
+        background-color: black;
+        color: #fff;
+        text-align: center;
+        padding: 5px 0;
+        border-radius: 6px;
+
+        /* Position the tooltip text - see examples below! */
+        position: absolute;
+        z-index: 1;
+    }
+
+    /* Show the tooltip text when you mouse over the tooltip container */
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+    }
+</style>
+
+<!-- you have to define 2 functions in the global scope: -->
+<script type="text/javascript">
+    systemDictionary = {
+        "KNX adapter settings": {
+            "de": "KNX Adaptereinstellungen",
+            "ru": "KNX адаптер конфигурация"
+        },
+        "Gateway IP :":         {"de": "KNX Gateway IP :",           "ru": "IP :"},
+        "Port :":               {"de": "Port :",                     "ru": "Порт :"},
+        "phys. EIB address :":  {"de": "phys. EIB Adresse :",   "ru": "физическая EIB адрес :"},
+        "KNX send delay":       {"de": "KNX-Sendeverzögerung", "ru:": "KNX задержка передачи"},
+        "help_tip":         {
+            "en": "On save the adapter restarts with new configuration immediately",
+            "de": "Beim Speichern von Einstellungen der Adapter wird sofort neu gestartet.",
+            "ru": "Сразу после сохранения настроек драйвер перезапуститься с новыми значениями"
+        },
+        "socket_help":         {
+            "en": "Used by adapters like rickshaw or vis",
+            "de": "Wird von Rickshaw oder Vis benutzt",
+            "ru": "Используется для Rickshaw или Vis"
+        },
+        "tooltip_sendDelay":     {
+            "en": "Inserts a send delay, to prevent connection cancelation or crash of some KNX/LAN Gateways",
+            "de": "Fügt eine Sendeverzögerung ein, falls das KNX/LAN Gateway abstürzen sollte",
+            "ru": "Добавляет задержку передачи случай происходит сбой шлюза KNX / LAN"
+        }
+    };
+    var knxprojFile = '<input type="file" id="knxprojFile" style="display: inline-block"/>';
+    function setValue(id, value) {
+        // example: select elements with id=key and class=value and insert value
+        if ($('#' + id + '.value').attr('type') == 'checkbox') {
+            alert(" IF setValue");
+            $('#' + id + '.value').prop('checkesd', value).change(function() {
+                onChange();
+            });
+        } else {
+            $('#' + id + '.value').val(value).blur(function() {
+                // check if entered values are valid
+                if (id == 'gwip') {
+                    var ip1 = $('#gwip').val();
+                    if (ValidateIPaddress(ip1)) {
+                        $('#gwip').val(ip1);
+                    } else {
+                        alert("Adresse ist NICHT gültig");
+                    }
+                }
+                if (id == 'gwipport') {
+                    var gwipport1 = $('#gwipport').val();
+                    $('#gwipport').val(gwipport1);
+                }
+                if (id == 'eibadr') {
+                    var eibadr1 = $('#eibadr').val();
+                    if (ValidateEIBaddress(eibadr1)) {
+                        $('#eibadr').val(eibadr1);
+                    } else {
+                        alert("Physikalische EIB - Adresse ist NICHT gültig");
+                    }
+                }
+                if (id == 'sendDelay'){
+                    var sendDelay1 = $('#sendDelay').val();
+                    $('#sendDelay').val(sendDelay1);
+                }
+
+                onChange();
+            }).keyup(function() {
+                $(this).trigger('change');
+            });
+        }
+    }
+
+    var onChange;
+
+    var model = (function() {
+        return {
+            getEntries : function (file, onend, onerror) {
+                zip.createReader(new zip.BlobReader(file), function (zipReader) {
+                    zipReader.getEntries(onend);
+                }, onerror);
+            },
+            getEntryFile : function (entry, creationMethod, onend, onprogress) {
+                var writer, zipFileEntry;
+
+                function getData() {
+                    entry.getData(writer, function(blob) {
+                        onend(blob);
+                    }, onprogress);
+                }
+
+                if (creationMethod === 'Blob') {
+                    writer = new zip.BlobWriter();
+                    getData();
+                } else {
+                    createTempFile(function(fileEntry) {
+                        zipFileEntry = fileEntry;
+                        writer = new zip.FileWriter(zipFileEntry);
+                        getData();
+                    });
+                }
+            }
+        };
+    })();
+    function extractXml(str) {
+        // <ComObject Id="M-0008_A-10D5-11-F6FC-O000A_O-0" FunctionText="Schalten" Name="Taste 1" Number="0" ObjectSize="2 Bytes" Priority="Low" CommunicationFlag="Enabled" ReadFlag="Disabled" ReadOnInitFlag="Disabled" TransmitFlag="Enabled" UpdateFlag="Disabled" WriteFlag="Enabled" Text="Taste 1" />`
+        var m = str.match(/(\w+="[^"]*)"/g);
+        if (!m) return {};
+        var obj = {};
+        for (var i = 0; i < m.length; i++) {
+            var parts = m[i].split('=');
+            obj[parts[0]] = parts[1] ? parts[1].substring(1, parts[1].length - 1) : '';
+        }
+        return obj;
+    }
+
+    function parse0XML(xml0){
+       // var dom = new DOMParser();
+       // var xml0doc = dom.parseFromString(xml0,"text/xml");
+        var comObjRefs = {};
+        var coRxml0 = xml0.match(/<ComObjectInstanceRef\s[^>]+\/>/g);
+        if (coRxml0){
+            for (var a = 0; a < coRxml0.length; a++){
+                var ob = extractXml(coRxml0[a]);
+                comObjRefs[ob.RefId] = ob.RefId.replace(/_O-.*/, '');
+            }
+        }
+        return comObjRefs;
+    }
+
+    function parseM(str) {
+        var name = str.match(/<ApplicationProgram\s.*Name="([^"]*)"/);
+        if (name) {
+            name = name[1];
+        } else {
+            name = null;
+        }
+        var deviceId = str.match(/<ApplicationProgram\s.*Id="([^"]*)"/);
+        if (deviceId) {
+            deviceId = deviceId[1];
+        } else {
+            deviceId = null;
+        }
+        var comObjectTableM = str.match(/<ComObject\s[^>]+\/>/g);
+        var comObjectTable = {};
+        if (comObjectTableM) {
+            for (var c = 0; c < comObjectTableM.length; c++) {
+                var ob = extractXml(comObjectTableM[c]);
+                comObjectTable[ob.Id] = {
+                    Text: ob.Text,
+                    Name: ob.Name,
+                    FunctionText: ob.FunctionText,
+                    ObjectSize: ob.ObjectSize,
+                    read: ob.ReadFlag,
+                    write: ob.WriteFlag,
+                    transmit: ob.TransmitFlag
+                };
+            }
+        }
+        var comObjectRefsM = str.match(/<ComObjectRef\s[^>]+\/>/g);
+        var comObjectRefs = {};
+        if (comObjectRefsM) {
+            for (var cc = 0; cc < comObjectRefsM.length; cc++) {
+                var obb = extractXml(comObjectRefsM[cc]);
+                comObjectRefs[obb.Id] = {
+                    Text: obb.Text || '',
+                    Name: obb.Name || '',
+                    FunctionText: obb.FunctionText || '',
+                    RefId: obb.RefId,
+                    ObjectSize: obb.ObjectSize || null,
+                    read: obb.ReadFlag || null,
+                    write: obb.WriteFlag || null,
+                    transmit: obb.TransmitFlag || null,
+                    Dpt: obb.DatapointType || null
+                };
+            }
+        }
+
+        return {
+            Name: name,//file[key].Name,
+            DeviceId: deviceId,//file[key].DeviceId,
+            ComObjectTable: comObjectTable,//new dom().parseFromString(file[key].ComObjectTable, 'text/xml'),
+            ComObjectRefs: comObjectRefs//new dom().parseFromString(file[key].ComObjectRefs, 'text/xml')
+            //  DevParameterBlock: new dom().parseFromString(file[key].DevParameterBlock, 'text/xml')
+        };
+    }
+
+    function sendFiles(deviceFiles, callback) {
+        for (var id in deviceFiles) {
+            if (!deviceFiles.hasOwnProperty(id)) continue;
+            if (deviceFiles[id]) {
+                sendTo(null, 'projectDeviceFile', {file: deviceFiles[id]}, function (result) {
+                    if (!result || result.error) {
+                        showMessage(_('Error: ') + (result ? result.error : _('Unknown')));
+                    } else {
+                        setTimeout(function () {
+                            sendFiles(deviceFiles, callback);
+                        }, 0);
+                    }
+                });
+                deviceFiles[id] = null;
+                return;
+            }
+        }
+        callback && callback();
+    }
+
+    function fileHandler(event) {
+        event.preventDefault();
+        var file = event.dataTransfer ? event.dataTransfer.files[0] : event.target.files[0];
+
+        if (!file) {
+            console.warn('invalid file object');
+            return false;
+        }
+        if (file.size > 100000000) {
+            showMessage('File is too big!');
+            $('#knxprojFile').replaceWith($(knxprojFile));
+            $('#knxprojFile').change(fileHandler);
+            return false;
+        }
+
+        zip.useWebWorkers = false;
+
+        model.getEntries(file, function (entries) {
+            var xml0E;
+            var knx_masterE;
+            var devicesFilesE = [];
+            var maxCat = 0;
+            var scanComplete = false;
+            //alert('entrie.length: '+ entries.length);
+            for (var e = 0; e < entries.length; e++) {
+
+                if (entries[e].filename === 'knx_master.xml') {
+                    knx_masterE = entries[e];
+                    maxCat++;
+                }
+
+                if (entries[e].filename.match(/\/0\.xml$/)) {
+                    xml0E = entries[e];
+                    //alert(' xml0E : ' + xml0E);
+                    maxCat++;
+                }
+
+                //  alert('Filename:' + entries[e].filename);
+                if (entries[e].filename.match(/\/M.*\.xml$/) ) {
+                    devicesFilesE.push(entries[e]);
+                    maxCat++;
+                }
+                //    alert('Filename:' + entries[e].filename);
+                if ( e === entries.length - 1 ) scanComplete = true;
+            }
+
+            $('#progress').show();
+            {
+                var xml0;
+                var knx_master;
+                var deviceFiles = {};
+                var callback = 0;
+
+                $('#progress').show();
+
+                readFiles();
+
+                function readFiles() {
+                    // Wait for filescan to complete
+                    if ( !scanComplete ) {
+                        setTimeout(readFiles(), 100);
+                        return;
+                    }
+
+                    model.getEntryFile(xml0E, 'Blob', function (result) {
+                        //first arguement must be an regular array. The array can be of any javascript objects. Array can contain array to make it multi dimensional
+                        var myReader = new FileReader();
+                        myReader.readAsText(result);
+                        myReader.addEventListener('loadend', function (e) {
+                            xml0 = (e.srcElement || e.target).result;
+                            parse0XML(xml0);
+                            callback++;
+                        });
+                    });
+
+                    model.getEntryFile(knx_masterE, 'Blob', function (result) {
+                        //first arguement must be an regular array. The array can be of any javascript objects. Array can contain array to make it multi dimensional
+                        var myReader = new FileReader();
+                        myReader.readAsText(result);
+                        myReader.addEventListener('loadend', function (e) {
+                            knx_master = (e.srcElement || e.target).result;
+                            callback++;
+                        });
+                    });
+
+                    // alert(devicesFilesE);
+                    var xfer = false;
+                    deviceFileUL(0);
+                    function deviceFileUL (key) {
+
+                        if ( xfer) {
+                            setTimeout(deviceFileUL, 1000);
+                            return;
+                        }
+
+                        if (key < devicesFilesE.length ) {
+                            xfer = true;
+                            var filename = devicesFilesE[key].filename;
+                            model.getEntryFile(devicesFilesE[key], 'Blob', function (result) {
+                                //first arguement must be an regular array. The array can be of any javascript objects. Array can contain array to make it multi dimensional
+                                var myReader = new FileReader();
+                                var dom = new DOMParser();
+                                myReader.readAsText(result);
+
+                                myReader.addEventListener('load', function (e) {
+                                    if (filename.match(/\/M/)) {
+                                        deviceFiles[filename.replace(/\.xml$/, '')] = parseM((e.srcElement || e.target).result);
+                                        callback++;
+                                        return;
+                                    }
+                                    var doc = dom.parseFromString((e.srcElement || e.target).result, 'text/xml');
+                                    var dev = doc.getElementsByTagName("ApplicationProgram")[0].getAttribute("Id");
+                                    var devComObjectTable = doc.getElementsByTagName("ComObjectTable")[0];
+                                    var devComObjectRefs = doc.getElementsByTagName("ComObjectRefs")[0];
+                                    // var devParameterBlock = doc.getElementsByTagName("Dynamic")[0];
+
+                                    var devComObjectTableTrans = {};
+                                    var devComObjectRefsTrans = {};
+
+                                    if (devComObjectTable && typeof devComObjectTable === 'object') {
+                                        devComObjectTableTrans = devComObjectTable.outerHTML;
+                                        //     alert(devComObjectTable.outerHTML);
+                                    }
+                                    else {
+                                        devComObjectTableTrans = '<ComObjectTable xmlns="http://knx.org/xml/project/13">\n </ComObjectTable>';
+                                        //    alert(' unklare ComObjectsTables in : ' + dev);
+                                    }
+
+                                    if (devComObjectRefs && typeof devComObjectRefs === 'object')
+                                        devComObjectRefsTrans = devComObjectRefs.outerHTML;
+                                    else {
+                                        devComObjectRefsTrans = '<ComObjectRefs xmlns="http://knx.org/xml/project/13">\n </ComObjectRefs>';
+                                        //    alert(' unklare ComObjectsRefs in : ' + dev);
+                                    }
+                                    deviceFiles[dev] = {
+                                        Name: doc.getElementsByTagName("ApplicationProgram")[0].getAttribute("Name"),
+                                        DeviceId: dev,
+                                        ComObjectTable: devComObjectTableTrans,
+                                        ComObjectRefs:  devComObjectRefsTrans
+                                        //       DevParameterBlock: devParameterBlock.outerHTML
+                                    };
+                                    //alert('deviceName: ' + doc.getElementsByTagName("ApplicationProgram")[0].getAttribute("Name") +  ' with ' + devComObjectTableTrans.length + ' Elements.');
+
+                                    callback++;
+                                });
+
+                                deviceFileUL(key + 1)
+                            });
+                            xfer = false;
+                        }
+                    }
+                    // wait for complete file readout
+                    transmitXML();
+                    function transmitXML() {
+
+                        $('#progress').attr('value', callback).attr('max', maxCat);
+
+                        if (callback < maxCat) {
+                            setTimeout(transmitXML, 100);
+                            return;
+                        }
+                        $('#knxprojFile').replaceWith($(knxprojFile));
+                        $('#knxprojFile').change(fileHandler);
+                        showMessage(_('Please wait while generating Objects.....it could take a while.'));
+
+                        sendTo(null, 'projectStart', null, function (result) {
+                            if (!result || result.error) {
+                                showMessage(_('Error: ') + (result ? result.error : _('Unknown')));
+                            } else {
+                                sendTo(null, 'projectXml0', {xml0: xml0}, function (result) {
+                                    if (!result || result.error) {
+                                        showMessage(_('Error: ') + (result ? result.error : _('Unknown')));
+                                    } else {
+                                        sendTo(null, 'projectKnxMaster', {knx_master: knx_master}, function (result) {
+                                            if (!result || result.error) {
+                                                showMessage(_('Error: ') + (result ? result.error : _('Unknown')));
+                                            } else {
+                                                sendFiles(deviceFiles, function () {
+                                                    sendTo(null, 'projectFinished', null, function (result) {
+                                                        if (!result || result.error) {
+                                                            showMessage(_('Error: ') + (result ? result.error : _('Unknown')));
+                                                        } else {
+                                                            showMessage(_('Extracted %s states ', result.count));
+                                                            sendTo(null, 'reload');
+                                                        }
+                                                    });
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+        }, function (error) {
+            $('#knxprojFile').replaceWith($(knxprojFile));
+            $('#knxprojFile').change(fileHandler);
+        });
+    }
+
+    function load (settings, _onChange) {
+        onChange = _onChange;
+        if (!settings) return;
+        fillSelectIPs('#adapterAddress', settings.adapterAddress, false, true);
+        settings.gwip     = settings.gwip || 0;
+        settings.gwipport = settings.gwipport || 0;
+
+        for (var key in settings) {
+            setValue(key, settings[key]);
+        }
+
+        getIsAdapterAlive(function (isAlive) {
+            if (isAlive || common.enabled) {
+                $('#knxprojFile').change(fileHandler);
+                $('#not-started').hide();
+            } else {
+                $('#knxprojFile').prop('disabled', true);
+                $('#not-started').show();
+            }
+        });
+
+        onChange(false);
+    }
+
+    function checkIPs(ip1, ip2) {
+        // normally it must be calculated the common subnet mask and applyed to both ip addresses, if result is the same => ok
+        // I will check only 2 first numbers of ipV4
+        var i1 = ip1.split('.');
+        var i2 = ip2.split('.');
+
+        // If ipv6 or DNS name
+        if (i1.length !== i2.length || i1.length !== 4) return 1;
+
+        if (i1[0] !== i2[0]) return 0;
+        if (i1[1] !== i2[1]) return 1;
+        if (i1[2] !== i2[2]) return 2;
+        if (i1[3] !== i2[3]) return 3;
+
+        return 4;
+    }
+
+    function ValidateIPaddress(inputText) {
+        var ipformat = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        return !!inputText.match(ipformat);
+    }
+
+    function ValidateEIBaddress(inputText) {
+        var eibformat = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        return !!inputText.match(eibformat);
+    }
+
+    // ... and the function save has to exist.
+    // you have to make sure the callback is called with the settings object as first param!
+    function save(callback) {
+        // example: select elements with class=value and build settings object
+        var obj = {};
+        $('.value').each(function () {
+            var $this = $(this);
+
+            var id = $this.attr('id');
+
+            if ($this.attr('type') === 'checkbox') {
+                obj[$this.attr('id')] = $this.prop('checked');
+            } else {
+                obj[$this.attr('id')] = $this.val();
+            }
+        });
+        sendTo(null, 'reload');
+        callback(obj);
+    }
+
+</script>
+
+<!-- you have to put your config page in a div with id adapter-container -->
+<div id="adapter-container">
+    <table>
+        <img src="knx.png" alt="logo" height="250" width="250">
+        <tr>
+            <td class="translate">Gateway IP :</td>
+            <td><input value="127.0.0.1" class="value" id="gwip"></td>
+
+        </tr>
+
+        <tr>
+            <td class="translate">Port :</td>
+            <td><input type="number" min="1025" max="65535" value="3671" class="value" id="gwipport"></td>
+        </tr>
+
+        <tr>
+            <td class="translate tooltip">phys. EIB address :
+                <span class="translate tooltiptext">Address of KNX device in the form of x.y.z</span>
+            </td>
+            <td><input value="1.1.5" class="value" id="eibadr"></td>
+        </tr>
+
+        <tr>
+            <td class="translate tooltip">KNX send delay :
+                <span class="tooltiptext translate">Inserts a send delay, to prevent connection cancelation or crash of some KNX/LAN Gateways</span>
+            </td>
+            <td><input type="range" class="value" id="sendDelay" name="grade" min=0 max=200 value=50 step=1 style="width: 200px; height: 20px; writing-mode: bt-lr;"></td>
+        </tr>
+
+        <tr>
+            <td>Upload knxproj File: </td>
+            <td><input type="file" id="knxprojFile" style="display: inline-block"/> <!-- accept="application/zip"-->
+                <div id="not-started" class="translate"  style="display: inline-block">not-started</div>
+                <progress id="progress" value="0" max="100"  style="display: inline-block"></progress>
+            </td>
+        </tr>
+    </table>
+    <p class="translate">help_tip</p>
+
+</div>

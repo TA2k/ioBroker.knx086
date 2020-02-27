@@ -1,0 +1,64 @@
+{
+  "name": "iobroker.knx",
+  "version": "0.0.1",
+  "description": "KNX adapter",
+  "author": {
+    "name": "TA2k",
+    "email": "tombox2020@gmail.com"
+  },
+  "homepage": "https://github.com/TA2k/ioBroker.knx",
+  "license": "MIT",
+  "keywords": [
+    "knx"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TA2k/ioBroker.knx"
+  },
+  "dependencies": {
+    "@iobroker/adapter-core": "^2.2.1",
+    "adm-zip": "^0.4.7",
+    "binary-parser": "^1.1.5",
+    "binary-protocol": "^0.0.0",
+    "ipaddr.js": "1.2.0",
+    "knx": "^2.3.7",
+    "machina": "^4.0.2",
+    "similarity": "^1.1.0",
+    "underscore": "^1.8.3",
+    "xmldom": "^0.1.27",
+    "xpath": "^0.0.24"
+  },
+  "devDependencies": {
+    "@iobroker/testing": "^2.0.2",
+    "@types/chai": "^4.2.9",
+    "@types/chai-as-promised": "^7.1.2",
+    "@types/gulp": "^4.0.6",
+    "@types/mocha": "^7.0.1",
+    "@types/node": "^10.17.16",
+    "@types/proxyquire": "^1.3.28",
+    "@types/sinon": "^7.5.2",
+    "@types/sinon-chai": "^3.2.3",
+    "axios": "^0.19.2",
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1",
+    "eslint": "^6.8.0",
+    "gulp": "^4.0.2",
+    "mocha": "^7.1.0",
+    "proxyquire": "^2.1.3",
+    "sinon": "^9.0.0",
+    "sinon-chai": "^3.5.0"
+  },
+  "main": "knx.js",
+  "scripts": {
+    "test:js": "mocha --opts test/mocha.custom.opts",
+    "test:package": "mocha test/package --exit",
+    "test:unit": "mocha test/unit --exit",
+    "test:integration": "mocha test/integration --exit",
+    "test": "npm run test:js && npm run test:package",
+    "lint": "eslint"
+  },
+  "bugs": {
+    "url": "https://github.com/TA2k/ioBroker.knx/issues"
+  },
+  "readmeFilename": "README.md"
+}

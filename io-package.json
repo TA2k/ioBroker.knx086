@@ -1,0 +1,98 @@
+{
+    "common": {
+        "name": "knx",
+        "version": "0.0.1",
+        "news": {
+            "0.0.1": {
+                "en": "initial release",
+                "de": "Erstveröffentlichung",
+                "ru": "Начальная версия",
+                "pt": "lançamento inicial",
+                "nl": "Eerste uitgave",
+                "fr": "Première version",
+                "it": "Versione iniziale",
+                "es": "Versión inicial",
+                "pl": "Pierwsze wydanie",
+                "zh-cn": "首次出版"
+            }
+        },
+        "title": "KNX",
+        "titleLang": {
+            "en": "KNX",
+            "de": "KNX",
+            "ru": "KNX",
+            "pt": "KNX",
+            "nl": "KNX",
+            "fr": "KNX",
+            "it": "KNX",
+            "es": "KNX",
+            "pl": "KNX",
+            "zh-cn": "KNX"
+        },
+        "desc": {
+            "en": "KNX adapter",
+            "de": "KNX-Adapter",
+            "ru": "Адаптер KNX",
+            "pt": "Adaptador KNX",
+            "nl": "KNX-adapter",
+            "fr": "Adaptateur KNX",
+            "it": "Adattatore KNX",
+            "es": "Adaptador KNX",
+            "pl": "Adapter KNX",
+            "zh-cn": "KNX适配器"
+        },
+        "authors": [
+            "TA2k <tombox2020@gmail.com>"
+        ],
+        "keywords": [
+            "knx"
+        ],
+        "license": "MIT",
+        "platform": "Javascript/Node.js",
+        "main": "main.js",
+        "icon": "knx.png",
+        "enabled": true,
+        "extIcon": "https://raw.githubusercontent.com/TA2k/ioBroker.knx/master/admin/knx.png",
+        "readme": "https://github.com/TA2k/ioBroker.knx/blob/master/README.md",
+        "loglevel": "info",
+        "mode": "daemon",
+        "type": "hardware",
+        "compact": true,
+        "connectionType": "local",
+        "dataSource": "poll",
+        "materialize": true,
+        "dependencies": [
+            {
+                "js-controller": ">=1.4.2"
+            }
+        ]
+    },
+    "native": {
+        "option1": true,
+        "option2": "42"
+    },
+    "objects": [],
+    "instanceObjects": [
+        {
+            "_id": "info",
+            "type": "channel",
+            "common": {
+                "name": "Information"
+            },
+            "native": {}
+        },
+        {
+            "_id": "info.connection",
+            "type": "state",
+            "common": {
+                "role": "indicator.connected",
+                "name": "Device or service connected",
+                "type": "boolean",
+                "read": true,
+                "write": false,
+                "def": false
+            },
+            "native": {}
+        }
+    ]
+}
