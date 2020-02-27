@@ -49,7 +49,7 @@
         ],
         "license": "MIT",
         "platform": "Javascript/Node.js",
-        "main": "main.js",
+        "main": "knx.js",
         "icon": "knx.png",
         "enabled": true,
         "extIcon": "https://raw.githubusercontent.com/TA2k/ioBroker.knx/master/admin/knx.png",
