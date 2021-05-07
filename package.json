@@ -24,7 +24,7 @@
     "knx": "^2.3.7",
     "machina": "^4.0.2",
     "similarity": "^1.1.0",
-    "underscore": "^1.8.3",
+    "underscore": "^1.12.1",
     "xmldom": "^0.1.27",
     "xpath": "^0.0.24"
   },
